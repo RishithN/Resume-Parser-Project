@@ -1,0 +1,5 @@
+File,Name,Email,Phone,Skills,Text Similarity (%),Skill Match (%),Final Match (%)
+resume1.pdf,"John Doe
+Email",john.doe@example.com,+91-9876543210,"numpy, python, excel, pandas, sql, power bi",15.58,83.33,49.46
+resume2.pdf,Priya Sharma,priya.sharma92@gmail.com,9876543211,"power bi, sql, excel",12.58,100.0,56.29
+resume3.pdf,Arjun Mehta,arjun.mehta.ai@gmail.com,+91 9845123456,"pandas, python, machine learning, numpy",5.08,50.0,27.54
