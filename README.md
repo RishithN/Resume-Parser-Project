@@ -1,5 +1,5 @@
 # Resume-Parser-Project
- This is a resume analyzer which matches multiple resumes based on the job description, mentions the skills, matched skills and missed skills accoding to the job description and also give the skill match and final match percentage, resume quality score as well as the feedback of the resume
+A web-based tool that automates resume parsing, job description matching, and candidate ranking using NLP and machine learning techniques, allowing recruiters or hiring managers to efficiently shortlist the best-fit candidates.
 # Resume Parser with Keyword & JD Matching
 
 This project extracts resume data from PDFs, compares skills and text with a job description, calculates match scores, visualizes results, and ranks candidates.
@@ -7,11 +7,11 @@ This project extracts resume data from PDFs, compares skills and text with a job
 ### 🔍 Features:
 - Resume parsing (name, email, phone, skills)
 - JD text similarity using TF-IDF
-- Skill match scoring
+- Auto-Ranking and Filtering
 - Resume quality analyzer
-- Shortlist candidates by match %
+- PDF Report Generator
 - Visual dashboards via Streamlit
-- Email notification to shortlisted (optional)
+- Shortlisting and CSV export
 
 ### 🛠 Tech Stack:
 - Python
