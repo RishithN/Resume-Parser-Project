@@ -1,13 +1,29 @@
 import re
 import PyPDF2
 
+# --- Shared Normalization + Blacklist (same as job_matcher.py) ---
+BLACKLIST = {
+    "required", "skills", "responsibilities", "qualifications",
+    "key", "experience", "about", "role", "requirements",
+    "preferred", "technologies", "tools"
+}
+
+def normalize_token(tok: str) -> str:
+    """Normalize skill tokens consistently for both Resume & JD."""
+    if not tok:
+        return ""
+    s = tok.lower().strip()
+    s = re.sub(r"(?<=\w)-(?=\w)", " ", s)   # deep-learning → deep learning
+    s = re.sub(r"[^\w\s\+\#]", " ", s)      # strip punctuation except + and #
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
 # --- PDF text extraction ---
 def extract_text_from_pdf(pdf_path):
     text = ""
     with open(pdf_path, "rb") as file:
         reader = PyPDF2.PdfReader(file)
         for page in reader.pages:
-            # Some PDFs may return None; guard with fallback
             page_text = page.extract_text() or ""
             text += page_text + "\n"
     return text
@@ -18,7 +34,6 @@ def extract_email(text):
     return match.group(0) if match else None
 
 def extract_phone(text):
-    # +CC optional, spaces/dashes allowed, 10-15 digits total
     match = re.search(r'\+?\d[\d\s\-]{8,15}\d', text)
     return match.group(0) if match else None
 
@@ -37,17 +52,10 @@ STOP_KEYS = [
 ]
 SEP_PATTERN = r"[,\n;/\|\&•·]+"  # common separators
 
-def normalize_skill_token(tok: str) -> str:
-    if not tok: return ""
-    s = tok.lower().strip()
-    # keep content inside parentheses as additional items but normalize base string
-    s = re.sub(r"(?<=\w)-(?=\w)", " ", s)  # deep-learning -> deep learning
-    s = re.sub(r"[^\w\s\+\#]", " ", s)     # strip punctuation except + and #
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
-
 def extract_section(text: str, start_keys, stop_keys) -> str:
-    if not text: return ""
+    """Extract the 'Skills' section from resume text."""
+    if not text:
+        return ""
     low = text.lower()
     start_pos = None
     for key in start_keys:
@@ -58,7 +66,6 @@ def extract_section(text: str, start_keys, stop_keys) -> str:
     if start_pos is None:
         return ""
 
-    # nearest stop heading after start
     stop_positions = []
     for key in stop_keys:
         m = re.search(rf"\n\s*\b{re.escape(key)}\b", low[start_pos:])
@@ -68,21 +75,16 @@ def extract_section(text: str, start_keys, stop_keys) -> str:
     return text[start_pos:end_pos]
 
 def extract_skills(text):
-    """
-    Dynamically extract skills by reading the Skills section (when present),
-    splitting by common delimiters, and normalizing tokens. No hardcoded list.
-    """
+    """Extract normalized skill tokens from resume text."""
     text = text or ""
-    # Try to isolate the Skills section
     chunk = extract_section(text, START_KEYS_RESUME, STOP_KEYS)
     if not chunk:
-        # Fallback: weak heuristic—use entire text
         chunk = text
 
-    # Also consider items inside parentheses as separate tokens
+    # tokens from parentheses
     paren_tokens = [m.group(1).strip() for m in re.finditer(r"\((.*?)\)", chunk)]
 
-    # Split by typical delimiters and also break "and"
+    # main token split
     raw_tokens = re.split(SEP_PATTERN, chunk)
     raw_tokens += paren_tokens
 
@@ -93,9 +95,8 @@ def extract_skills(text):
             continue
         tok = re.sub(r"\band\b", ",", tok, flags=re.I)
         for sub in [s.strip() for s in tok.split(",") if s.strip()]:
-            norm = normalize_skill_token(sub)
-            # ignore very short or meaningless tokens
-            if norm and len(norm) > 1:
+            norm = normalize_token(sub)
+            if norm and len(norm) > 1 and norm not in BLACKLIST:
                 skills.append(norm)
 
     # de-duplicate preserving order
@@ -112,6 +113,6 @@ def parse_resume(pdf_path):
         "name": extract_name(text),
         "email": extract_email(text),
         "phone": extract_phone(text),
-        "skills": extract_skills(text),   # dynamic list
+        "skills": extract_skills(text),   # normalized + blacklist applied
         "raw_text": text
     }
