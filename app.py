@@ -268,7 +268,7 @@ if uploaded_resumes and uploaded_jd:
                 # --- Keyword / similarity score (optional) ---
                 try:
                     match = get_resume_match_score(
-                        resume_data=resume_data,
+                        resume_data=data,
                         jd_text=jd_text
                     )
                 except Exception as e:
