@@ -130,13 +130,17 @@ def generate_pdf(data):
         pdf.output(tmp_pdf.name)
         return tmp_pdf.name
 
+# --- Main Logic ---
 if uploaded_resumes and uploaded_jd:
     if st.button("🔍 Match Resumes Now"):
         start_time = time.time()
         try:
             jd_text = uploaded_jd.read().decode("utf-8")
+            extracted_jd_skills = [s.strip().lower() for s in jd_text.split(",")]  # simple skill extraction
         except Exception:
             jd_text = ""
+            extracted_jd_skills = []
+
         results = []
         st.info(f"Matching {len(uploaded_resumes)} resume(s)...")
         with st.spinner("🔄 Processing..."):
@@ -150,40 +154,72 @@ if uploaded_resumes and uploaded_jd:
                     st.error(f"Failed to save uploaded file {resume_file.name}")
                     st.exception(e)
                     continue
+
+                # --- Parse Resume ---
                 try:
                     data = parse_resume(tmp_path)
                 except Exception as e:
                     data = {"name":"Unknown","email":None,"phone":None,"skills":[],"raw_text":""}
                     st.error(f"parse_resume failed for {resume_file.name}")
                     st.exception(e)
+
                 raw_text = data.get('raw_text', '')
+                extracted_resume_skills = [s.lower() for s in data.get('skills', [])]
+
+                # --- Compute Matched / Missing Skills ---
+                jd_skills_set = set(extracted_jd_skills)
+                resume_skills_set = set(extracted_resume_skills)
+                matched_skills = list(resume_skills_set & jd_skills_set)
+                missing_skills = list(jd_skills_set - resume_skills_set)
+
+                # Resume Score (% of JD skills matched)
+                if jd_skills_set:
+                    resume_score = round(len(matched_skills) / len(jd_skills_set) * 100, 2)
+                else:
+                    resume_score = 0
+
+                # --- Keyword / similarity score (optional) ---
                 try:
-                    match = get_resume_match_score(resume_text=raw_text, resume_skills=data.get('skills', []), jd_text=jd_text)
+                    match = get_resume_match_score(resume_text=raw_text,
+                                                   resume_skills=extracted_resume_skills,
+                                                   jd_text=jd_text)
                 except Exception as e:
                     st.error(f"get_resume_match_score failed for {resume_file.name}")
                     st.exception(e)
-                    match = {"similarity_score":0,"skill_score":0,"final_score":0,"matched_skills":[],"missing_skills":[],"matched_keywords":[]}
-                try:
-                    os.remove(tmp_path)
-                except Exception:
-                    pass
+                    match = {"similarity_score":0,
+                             "skill_score":resume_score,
+                             "final_score":resume_score,
+                             "matched_skills":matched_skills,
+                             "missing_skills":missing_skills,
+                             "matched_keywords":[]}
+
+                # --- Resume Quality ---
                 quality_score, feedback_summary = analyze_resume_quality(data, len(raw_text.split()))
+
+                # --- Append Results ---
                 results.append({
                     "File": resume_file.name,
                     "Name": data.get('name'),
                     "Email": data.get('email'),
                     "Phone": data.get('phone'),
-                    "Skills": ', '.join(data.get('skills', [])),
-                    "Matched Skills": ', '.join(match.get('matched_skills', [])),
-                    "Missing Skills": ', '.join(match.get('missing_skills', [])),
+                    "Skills": ', '.join(extracted_resume_skills),
+                    "Matched Skills": ', '.join(matched_skills),
+                    "Missing Skills": ', '.join(missing_skills),
                     "Matched Keywords": ', '.join(match.get('matched_keywords', [])),
                     "Text Similarity (%)": match.get('similarity_score', 0),
-                    "Skill Match (%)": match.get('skill_score', 0),
-                    "Final Match (%)": match.get('final_score', 0),
-                    "Match Quality": match_label(match.get('final_score', 0)),
+                    "Skill Match (%)": match.get('skill_score', resume_score),
+                    "Final Match (%)": match.get('final_score', resume_score),
+                    "Match Quality": match_label(match.get('final_score', resume_score)),
                     "Resume Quality Score": quality_score,
                     "Feedback Summary": feedback_summary
                 })
+
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+
+        # --- Display Results ---
         df = pd.DataFrame(results)
         if df.empty:
             st.warning("No results to display.")
@@ -206,6 +242,7 @@ if uploaded_resumes and uploaded_jd:
             except Exception:
                 st.dataframe(df)
 
+            # --- Visual Analysis ---
             with st.expander("📊 Visual Analysis"):
                 col1, col2 = st.columns(2)
                 with col1:
@@ -245,6 +282,7 @@ if uploaded_resumes and uploaded_jd:
                     st.error("Error creating heatmap")
                     st.exception(e)
 
+            # --- Download CSV ---
             csv_all = df.to_csv(index=False).encode("utf-8")
             st.download_button("⬇️ Download All Results (CSV)", csv_all, "all_results.csv", "text/csv", use_container_width=True)
 
@@ -253,6 +291,7 @@ if uploaded_resumes and uploaded_jd:
                 csv_shortlist = shortlisted_df.to_csv(index=False).encode("utf-8")
                 st.download_button("✅ Download Shortlisted Only (≥ 55%)", csv_shortlist, "shortlisted_candidates.csv", "text/csv", use_container_width=True)
 
+            # --- Download PDF ---
             st.subheader("📁 Download PDF Reports")
             for i, row in df.iterrows():
                 try:
