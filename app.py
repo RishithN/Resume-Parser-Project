@@ -135,33 +135,83 @@ def generate_pdf(data):
         return tmp_pdf.name
 
 # ----------------------------
-# Skill Cleaning & Extraction
+# JD Skill Extraction (Dynamic, No Hardcoding)
 # ----------------------------
-def clean_skill(skill: str) -> str:
-    """Normalize a skill string (lowercase, strip, remove punctuation)."""
-    if not skill:
-        return ""
-    skill = skill.lower().strip()
-    skill = re.sub(r"[^\w\s\+\#]", "", skill)  # allow alphanum, +, #
-    return skill
-
-def extract_skills_from_text(text: str, known_skills: list) -> list:
-    """Extract skills by matching known skills inside JD/resume text."""
-    text = text.lower()
-    found = []
-    for skill in known_skills:
-        if skill.lower() in text:
-            found.append(skill.lower())
-    return list(set(found))
-
-# Example dictionary of skills (extend as needed)
-KNOWN_SKILLS = [
-    "python", "java", "c++", "c#", "sql", "excel", "power bi",
-    "machine learning", "deep learning", "tensorflow", "keras", "pytorch",
-    "scikit-learn", "pandas", "numpy", "matplotlib", "seaborn",
-    "data analysis", "data visualization", "nlp", "project management",
-    "communication", "leadership"
+START_KEYS_JD = [
+    "required skills", "requirements", "responsibilities", "what you'll do",
+    "qualifications", "what you bring", "must have", "nice to have",
+    "skills", "technical skills"
 ]
+STOP_KEYS = [
+    "education", "experience", "about us", "about the role", "benefits",
+    "compensation", "salary", "how to apply", "company", "location"
+]
+SEP_PATTERN = r"[,\n;/\|\&•·]+"  # common separators
+
+def normalize_skill_token(tok: str) -> str:
+    if not tok: return ""
+    s = tok.lower().strip()
+    # turn hyphens between letters into space
+    s = re.sub(r"(?<=\w)-(?=\w)", " ", s)
+    # remove surrounding punctuation but keep + and # if present
+    s = re.sub(r"[^\w\s\+\#]", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+def extract_section(text: str, start_keys, stop_keys) -> str:
+    if not text: return ""
+    low = text.lower()
+    start_pos = None
+    for key in start_keys:
+        m = re.search(rf"{re.escape(key)}\s*[:\-]?", low)
+        if m:
+            start_pos = m.end()
+            break
+    if start_pos is None:
+        return ""
+    # find nearest stop after start
+    stop_positions = []
+    for key in stop_keys:
+        m = re.search(rf"\n\s*{re.escape(key)}\b", low[start_pos:])
+        if m:
+            stop_positions.append(start_pos + m.start())
+    end_pos = min(stop_positions) if stop_positions else len(text)
+    return text[start_pos:end_pos]
+
+def extract_skills_dynamic_from_jd(jd_text: str) -> list:
+    """
+    Extract likely skill tokens from JD by reading typical sections and splitting on separators.
+    """
+    if not jd_text: return []
+    chunk = extract_section(jd_text, START_KEYS_JD, STOP_KEYS)
+    if not chunk:
+        chunk = jd_text  # fallback: use full JD if no section detected
+
+    # also capture inside parentheses as possible tokens
+    paren_tokens = [m.group(1).strip() for m in re.finditer(r"\((.*?)\)", chunk)]
+
+    raw_tokens = re.split(SEP_PATTERN, chunk)
+    raw_tokens += paren_tokens
+
+    skills = []
+    for tok in raw_tokens:
+        tok = tok.strip()
+        if not tok:
+            continue
+        # break phrases like "Python and SQL"
+        tok = re.sub(r"\band\b", ",", tok, flags=re.I)
+        for sub in [t for t in [t.strip() for t in tok.split(",")] if t]:
+            norm = normalize_skill_token(sub)
+            if norm and len(norm) > 1:
+                skills.append(norm)
+
+    # de-duplicate keeping order
+    seen, uniq = set(), []
+    for s in skills:
+        if s not in seen:
+            seen.add(s)
+            uniq.append(s)
+    return uniq
 
 # ----------------------------
 # Main Logic
@@ -171,10 +221,10 @@ if uploaded_resumes and uploaded_jd:
         start_time = time.time()
         try:
             jd_text = uploaded_jd.read().decode("utf-8")
-            extracted_jd_skills = extract_skills_from_text(jd_text, KNOWN_SKILLS)
+            jd_skills = extract_skills_dynamic_from_jd(jd_text)
         except Exception:
             jd_text = ""
-            extracted_jd_skills = []
+            jd_skills = []
 
         results = []
         st.info(f"Matching {len(uploaded_resumes)} resume(s)...")
@@ -199,11 +249,13 @@ if uploaded_resumes and uploaded_jd:
                     st.exception(e)
 
                 raw_text = data.get('raw_text', '')
-                extracted_resume_skills = [clean_skill(s) for s in data.get('skills', []) if s]
+                # resume_parser now returns a dynamic list; normalize here again for safety
+                extracted_resume_skills = [normalize_skill_token(s) for s in (data.get('skills') or []) if s]
 
-                # --- Compute Matched / Missing Skills ---
-                jd_skills_set = set(extracted_jd_skills)
+                # --- Compute Matched / Missing Skills (JD vs Resume) ---
+                jd_skills_set = set([normalize_skill_token(s) for s in jd_skills if s])
                 resume_skills_set = set(extracted_resume_skills)
+
                 matched_skills = sorted(list(jd_skills_set & resume_skills_set))
                 missing_skills = sorted(list(jd_skills_set - resume_skills_set))
 
@@ -215,9 +267,12 @@ if uploaded_resumes and uploaded_jd:
 
                 # --- Keyword / similarity score (optional) ---
                 try:
-                    match = get_resume_match_score(resume_text=raw_text,
-                                                   resume_skills=extracted_resume_skills,
-                                                   jd_text=jd_text)
+                    match = get_resume_match_score(
+                        resume_text=raw_text,
+                        resume_skills=list(resume_skills_set),
+                        jd_text=jd_text,
+                        jd_skills=list(jd_skills_set)  # pass for consistent scoring
+                    )
                 except Exception as e:
                     st.error(f"get_resume_match_score failed for {resume_file.name}")
                     st.exception(e)
@@ -237,13 +292,14 @@ if uploaded_resumes and uploaded_jd:
                     "Name": data.get('name'),
                     "Email": data.get('email'),
                     "Phone": data.get('phone'),
-                    "Skills": ', '.join(extracted_resume_skills),
+                    # show ALL normalized resume skills returned by parser
+                    "Skills": ', '.join(sorted(list(resume_skills_set))),
                     "Matched Skills": ', '.join(matched_skills),
                     "Missing Skills": ', '.join(missing_skills),
-                    "Matched Keywords": ', '.join(match.get('matched_keywords', [])),
-                    "Text Similarity (%)": match.get('similarity_score', 0),
-                    "Skill Match (%)": match.get('skill_score', resume_score),
-                    "Final Match (%)": match.get('final_score', resume_score),
+                    "Matched Keywords": ', '.join(sorted(list(set(match.get('matched_keywords', []))))),
+                    "Text Similarity (%)": round(match.get('similarity_score', 0), 2),
+                    "Skill Match (%)": round(match.get('skill_score', resume_score), 2),
+                    "Final Match (%)": round(match.get('final_score', resume_score), 2),
                     "Match Quality": match_label(match.get('final_score', resume_score)),
                     "Resume Quality Score": quality_score,
                     "Feedback Summary": feedback_summary
