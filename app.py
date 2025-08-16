@@ -266,20 +266,26 @@ if uploaded_resumes and uploaded_jd:
                     resume_score = 0
 
                 # --- Keyword / similarity score (optional) ---
+                # --- Keyword / similarity score (optional) ---
                 try:
                     match = get_resume_match_score(
-                        resume_data=data,
-                        jd_text=jd_text
+                       resume_data=data,
+                       jd_text=jd_text,
+                       resume_skills=resume_skills_set,
+                       jd_skills=jd_skills_set
                     )
                 except Exception as e:
                     st.error(f"get_resume_match_score failed for {resume_file.name}")
                     st.exception(e)
-                    match = {"similarity_score":0,
-                             "skill_score":resume_score,
-                             "final_score":resume_score,
-                             "matched_skills":matched_skills,
-                             "missing_skills":missing_skills,
-                             "matched_keywords":[]}
+                    match = {
+                        "similarity_score": 0,
+                        "skill_score": resume_score,
+                        "final_score": resume_score,
+                        "matched_skills": matched_skills,
+                        "missing_skills": missing_skills,
+                        "matched_keywords": []
+                    }
+
 
                 # --- Resume Quality ---
                 quality_score, feedback_summary = analyze_resume_quality(data, len(raw_text.split()))
