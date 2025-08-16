@@ -29,13 +29,16 @@ def clean_and_split_skills(text: str) -> list:
     return list(set(skills))  # remove duplicates
 
 
-def get_resume_match_score(resume_data: dict, jd_text: str) -> dict:
-    """Matches resume skills with job description skills and calculates score."""
+def get_resume_match_score(resume_data: dict, jd_text: str, resume_text: str = "") -> dict:
+    """
+    Matches resume skills with job description skills and calculates score.
+    resume_text is optional (kept for compatibility with app.py).
+    """
     
     # Extract JD skills dynamically
     jd_skills = clean_and_split_skills(jd_text)
     
-    # Extract Resume skills
+    # Extract Resume skills (from parser)
     raw_resume_skills = resume_data.get("skills", [])
     resume_skills = [
         re.sub(r"[^\w\+\# ]", "", s.lower()).strip()
