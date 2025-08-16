@@ -11,7 +11,7 @@ from fpdf import FPDF
 st.set_page_config(page_title="📄 Resume Matcher", layout="centered", initial_sidebar_state="collapsed")
 
 st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-st.image("logo.png", use_container_width=False, width=150)
+#st.image("logo.png", use_container_width=False, width=150)
 st.markdown("</div>", unsafe_allow_html=True)
 
 st.markdown("""
