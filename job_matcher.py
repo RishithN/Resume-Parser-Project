@@ -29,7 +29,7 @@ def clean_and_split_skills(text: str) -> list:
     return list(set(skills))  # remove duplicates
 
 
-def match_resume_with_jd(resume_data: dict, jd_text: str) -> dict:
+def get_resume_match_score(resume_data: dict, jd_text: str) -> dict:
     """Matches resume skills with job description skills and calculates score."""
     
     # Extract JD skills dynamically
