@@ -1,23 +1,6 @@
 import re
 import PyPDF2
 
-# --- Shared Normalization + Blacklist (same as job_matcher.py) ---
-BLACKLIST = {
-    "required", "skills", "responsibilities", "qualifications",
-    "key", "experience", "about", "role", "requirements",
-    "preferred", "technologies", "tools"
-}
-
-def normalize_token(tok: str) -> str:
-    """Normalize skill tokens consistently for both Resume & JD."""
-    if not tok:
-        return ""
-    s = tok.lower().strip()
-    s = re.sub(r"(?<=\w)-(?=\w)", " ", s)   # deep-learning → deep learning
-    s = re.sub(r"[^\w\s\+\#]", " ", s)      # strip punctuation except + and #
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
-
 # --- PDF text extraction ---
 def extract_text_from_pdf(pdf_path):
     text = ""
@@ -50,10 +33,18 @@ STOP_KEYS = [
     "experience", "work experience", "professional experience", "projects",
     "education", "certifications", "achievements", "summary", "profile"
 ]
-SEP_PATTERN = r"[,\n;/\|\&•·]+"  # common separators
+SEP_PATTERN = r"[,\n;/\|\&•·]+"
+
+def normalize_skill_token(tok: str) -> str:
+    if not tok:
+        return ""
+    s = tok.lower().strip()
+    s = re.sub(r"(?<=\w)-(?=\w)", " ", s)  
+    s = re.sub(r"[^\w\s\+\#]", " ", s)     
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
 
 def extract_section(text: str, start_keys, stop_keys) -> str:
-    """Extract the 'Skills' section from resume text."""
     if not text:
         return ""
     low = text.lower()
@@ -75,16 +66,12 @@ def extract_section(text: str, start_keys, stop_keys) -> str:
     return text[start_pos:end_pos]
 
 def extract_skills(text):
-    """Extract normalized skill tokens from resume text."""
     text = text or ""
     chunk = extract_section(text, START_KEYS_RESUME, STOP_KEYS)
     if not chunk:
         chunk = text
 
-    # tokens from parentheses
     paren_tokens = [m.group(1).strip() for m in re.finditer(r"\((.*?)\)", chunk)]
-
-    # main token split
     raw_tokens = re.split(SEP_PATTERN, chunk)
     raw_tokens += paren_tokens
 
@@ -95,11 +82,10 @@ def extract_skills(text):
             continue
         tok = re.sub(r"\band\b", ",", tok, flags=re.I)
         for sub in [s.strip() for s in tok.split(",") if s.strip()]:
-            norm = normalize_token(sub)
-            if norm and len(norm) > 1 and norm not in BLACKLIST:
+            norm = normalize_skill_token(sub)
+            if norm and len(norm) > 1:
                 skills.append(norm)
 
-    # de-duplicate preserving order
     seen, uniq = set(), []
     for s in skills:
         if s not in seen:
@@ -113,6 +99,6 @@ def parse_resume(pdf_path):
         "name": extract_name(text),
         "email": extract_email(text),
         "phone": extract_phone(text),
-        "skills": extract_skills(text),   # normalized + blacklist applied
+        "skills": extract_skills(text),
         "raw_text": text
     }
