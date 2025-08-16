@@ -6,7 +6,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from fpdf import FPDF
-import nltk_setup
 
 
 st.set_page_config(page_title="📄 Resume Matcher", layout="centered", initial_sidebar_state="collapsed")
