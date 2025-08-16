@@ -1,89 +1,91 @@
 import re
-import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from difflib import SequenceMatcher
+from typing import List, Dict, Set, Any
 
-# --- Utility: clean text ---
-def clean_text(text: str) -> str:
-    if not text:
-        return ""
-    text = text.lower()
-    text = re.sub(r"[^a-z0-9\+\# ]+", " ", text)  # keep alnum, +, #
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+# Constants
+SKILL_SIMILARITY_THRESHOLD = 0.85
+JD_SKILL_SECTIONS = [
+    "required skills", "requirements", "qualifications",
+    "technical skills", "must have", "nice to have"
+]
 
+def clean_skill(skill: str) -> str:
+    """Normalize a skill string"""
+    skill = skill.lower().strip()
+    skill = re.sub(r"[^\w\s+#-]", "", skill)  # Remove special chars
+    skill = re.sub(r"\s+", " ", skill)       # Collapse whitespace
+    return skill
 
-# --- Remove noisy words often seen in job descriptions ---
-STOPWORDS_JD = {
-    "required", "requirements", "responsibilities", "preferred",
-    "experience", "skills", "knowledge", "proficiency",
-    "ability", "capabilities", "competencies"
-}
+def extract_jd_skills(jd_text: str) -> Set[str]:
+    """Extract skills from job description text"""
+    if not jd_text:
+        return set()
+    
+    # Find skills section
+    jd_lower = jd_text.lower()
+    skill_section = ""
+    
+    for section in JD_SKILL_SECTIONS:
+        if section in jd_lower:
+            start = jd_lower.index(section) + len(section)
+            skill_section = jd_text[start:].split("\n")[0]
+            break
+    
+    if not skill_section:  # Fallback to whole JD
+        skill_section = jd_text
+    
+    # Split into individual skills
+    skill_list = re.split(r"[,\n;/&+]", skill_section)
+    skills = set()
+    
+    for skill in skill_list:
+        skill = clean_skill(skill)
+        if skill and len(skill) > 2:  # Filter out very short strings
+            skills.add(skill)
+    
+    return skills
 
+def skill_similarity(skill1: str, skill2: str) -> float:
+    """Calculate similarity between two skills"""
+    return SequenceMatcher(None, skill1.lower(), skill2.lower()).ratio()
 
-def preprocess_jd_text(jd_text: str) -> str:
-    jd_text = clean_text(jd_text)
-    tokens = [t for t in jd_text.split() if t not in STOPWORDS_JD]
-    return " ".join(tokens)
-
-
-# --- Cosine similarity on cleaned text ---
-def compute_text_similarity(text1: str, text2: str) -> float:
-    text1, text2 = clean_text(text1), clean_text(text2)
-    if not text1 or not text2:
-        return 0.0
-    vect = TfidfVectorizer().fit([text1, text2])
-    tfidf = vect.transform([text1, text2])
-    return cosine_similarity(tfidf[0], tfidf[1])[0][0]
-
-
-# --- Skill match score ---
-def compute_skill_match(jd_skills, resume_skills) -> float:
-    if not jd_skills or not resume_skills:
-        return 0.0
-    jd_set = set(s.lower() for s in jd_skills)
-    resume_set = set(s.lower() for s in resume_skills)
-    match_count = len(jd_set & resume_set)
-    return match_count / len(jd_set) if jd_set else 0.0
-
-
-# --- Final resume match function ---
-def get_resume_match_score(jd_text, jd_skills, resume_data):
-    """
-    jd_text    : full job description (string)
-    jd_skills  : list of skills extracted from JD
-    resume_data: dict { "name","email","phone","skills","raw_text" }
-    """
-
-    # Clean JD text
-    jd_text_cleaned = preprocess_jd_text(jd_text)
-
-    # Use only skills + experience portions of resume for text sim
-    resume_focus_text = " ".join(resume_data.get("skills", [])) or resume_data.get("raw_text", "")
-
-    # Text similarity
-    text_sim = compute_text_similarity(jd_text_cleaned, resume_focus_text)
-
-    # Skill match
-    skill_match = compute_skill_match(jd_skills, resume_data.get("skills", []))
-
-    # Weighted final score
-    final_score = (0.4 * text_sim * 100) + (0.6 * skill_match * 100)
-
-    # Match quality bucket
-    if final_score >= 70:
-        quality = "High"
-    elif final_score >= 50:
-        quality = "Medium"
-    else:
-        quality = "Low"
-
+def get_resume_match_score(
+    resume_data: Dict[str, Any],
+    jd_text: str,
+    resume_skills: Set[str],
+    jd_skills: Set[str]
+) -> Dict[str, Any]:
+    """Calculate matching scores between resume and JD"""
+    if not jd_skills:
+        jd_skills = extract_jd_skills(jd_text)
+    
+    # Exact matches
+    matched_skills = sorted(jd_skills & resume_skills)
+    missing_skills = sorted(jd_skills - resume_skills)
+    
+    # Fuzzy matches
+    matched_keywords = []
+    for jd_skill in jd_skills:
+        for resume_skill in resume_skills:
+            if skill_similarity(jd_skill, resume_skill) > SKILL_SIMILARITY_THRESHOLD:
+                matched_keywords.append(jd_skill)
+                break
+    
+    # Calculate scores
+    skill_score = (len(matched_skills) / len(jd_skills)) * 100 if jd_skills else 0
+    
+    # Text similarity (simplified)
+    common_words = set(jd_text.lower().split()) & set(resume_data.get('raw_text', '').lower().split())
+    similarity_score = (len(common_words) / len(set(jd_text.lower().split()))) * 100 if jd_text else 0
+    
+    # Combined score (weighted)
+    final_score = (skill_score * 0.7) + (similarity_score * 0.3)
+    
     return {
-        "name": resume_data.get("name"),
-        "email": resume_data.get("email"),
-        "phone": resume_data.get("phone"),
-        "text_similarity": round(text_sim * 100, 2),
-        "skill_match": round(skill_match * 100, 2),
-        "final_score": round(final_score, 2),
-        "match_quality": quality,
+        "matched_skills": matched_skills,
+        "missing_skills": missing_skills,
+        "matched_keywords": list(set(matched_keywords)),  # Deduplicate
+        "skill_score": round(skill_score, 1),
+        "similarity_score": round(similarity_score, 1),
+        "final_score": round(final_score, 1),
     }
