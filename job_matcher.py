@@ -3,23 +3,16 @@ from difflib import SequenceMatcher
 from typing import List, Dict, Set, Any
 
 # Constants
-SKILL_SIMILARITY_THRESHOLD = 0.85
+SKILL_THRESHOLD = 0.85
 JD_SKILL_SECTIONS = [
     "required skills", "requirements", "qualifications",
     "technical skills", "must have", "nice to have"
 ]
 
-def clean_skill(skill: str) -> str:
-    """Normalize a skill string"""
-    skill = skill.lower().strip()
-    skill = re.sub(r"[^\w\s+#-]", "", skill)  # Remove special chars
-    skill = re.sub(r"\s+", " ", skill)       # Collapse whitespace
-    return skill
-
-def extract_jd_skills(jd_text: str) -> Set[str]:
+def extract_jd_skills(jd_text: str) -> List[str]:
     """Extract skills from job description text"""
     if not jd_text:
-        return set()
+        return []
     
     # Find skills section
     jd_lower = jd_text.lower()
@@ -28,64 +21,85 @@ def extract_jd_skills(jd_text: str) -> Set[str]:
     for section in JD_SKILL_SECTIONS:
         if section in jd_lower:
             start = jd_lower.index(section) + len(section)
-            skill_section = jd_text[start:].split("\n")[0]
+            # Get text until next section or end
+            skill_section = jd_text[start:].split('\n')[0]
             break
     
-    if not skill_section:  # Fallback to whole JD
+    # Fallback to entire JD if no section found
+    if not skill_section:
         skill_section = jd_text
     
     # Split into individual skills
-    skill_list = re.split(r"[,\n;/&+]", skill_section)
-    skills = set()
+    skills = re.split(r"[,\n;/&+]", skill_section)
+    cleaned_skills = []
     
-    for skill in skill_list:
-        skill = clean_skill(skill)
-        if skill and len(skill) > 2:  # Filter out very short strings
-            skills.add(skill)
+    for skill in skills:
+        skill = skill.strip().lower()
+        # Remove special chars but keep + and #
+        skill = re.sub(r"[^\w\s+#-]", "", skill)
+        skill = re.sub(r"\s+", " ", skill).strip()
+        
+        # Filter out empty and very short skills
+        if skill and len(skill) > 2 and not skill.isdigit():
+            cleaned_skills.append(skill)
     
-    return skills
+    return list(set(cleaned_skills))  # Remove duplicates
 
 def skill_similarity(skill1: str, skill2: str) -> float:
-    """Calculate similarity between two skills"""
+    """Calculate similarity between two skills (0-1)"""
     return SequenceMatcher(None, skill1.lower(), skill2.lower()).ratio()
 
 def get_resume_match_score(
     resume_data: Dict[str, Any],
     jd_text: str,
-    resume_skills: Set[str],
-    jd_skills: Set[str]
+    resume_skills: List[str],
+    jd_skills: List[str] = None
 ) -> Dict[str, Any]:
-    """Calculate matching scores between resume and JD"""
-    if not jd_skills:
+    """
+    Calculate matching scores between resume and JD
+    Returns:
+        {
+            "matched_skills": List[str],
+            "missing_skills": List[str],
+            "skill_score": float (0-100),
+            "final_score": float (0-100)
+        }
+    """
+    # Extract JD skills if not provided
+    if jd_skills is None:
         jd_skills = extract_jd_skills(jd_text)
     
+    jd_skills_set = set(jd_skills)
+    resume_skills_set = set(resume_skills)
+    
     # Exact matches
-    matched_skills = sorted(jd_skills & resume_skills)
-    missing_skills = sorted(jd_skills - resume_skills)
+    matched_skills = sorted(jd_skills_set & resume_skills_set)
+    missing_skills = sorted(jd_skills_set - resume_skills_set)
     
     # Fuzzy matches
-    matched_keywords = []
-    for jd_skill in jd_skills:
-        for resume_skill in resume_skills:
-            if skill_similarity(jd_skill, resume_skill) > SKILL_SIMILARITY_THRESHOLD:
-                matched_keywords.append(jd_skill)
+    fuzzy_matches = []
+    for jd_skill in jd_skills_set:
+        for resume_skill in resume_skills_set:
+            if skill_similarity(jd_skill, resume_skill) >= SKILL_THRESHOLD:
+                fuzzy_matches.append(jd_skill)
                 break
     
     # Calculate scores
-    skill_score = (len(matched_skills) / len(jd_skills)) * 100 if jd_skills else 0
+    skill_score = (len(matched_skills) / len(jd_skills_set)) * 100 if jd_skills_set else 0
     
-    # Text similarity (simplified)
-    common_words = set(jd_text.lower().split()) & set(resume_data.get('raw_text', '').lower().split())
-    similarity_score = (len(common_words) / len(set(jd_text.lower().split()))) * 100 if jd_text else 0
+    # Text similarity (simple word overlap)
+    resume_words = set(re.findall(r'\w+', resume_data.get('raw_text', '').lower())
+    jd_words = set(re.findall(r'\w+', jd_text.lower()))
+    common_words = resume_words & jd_words
+    similarity_score = (len(common_words) / len(jd_words)) * 100 if jd_words else 0
     
-    # Combined score (weighted)
+    # Combined score (weighted average)
     final_score = (skill_score * 0.7) + (similarity_score * 0.3)
     
     return {
-        "matched_skills": matched_skills,
+        "matched_skills": matched_skills + fuzzy_matches,
         "missing_skills": missing_skills,
-        "matched_keywords": list(set(matched_keywords)),  # Deduplicate
         "skill_score": round(skill_score, 1),
         "similarity_score": round(similarity_score, 1),
-        "final_score": round(final_score, 1),
+        "final_score": round(final_score, 1)
     }
