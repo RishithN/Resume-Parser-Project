@@ -5,20 +5,13 @@ def clean_and_split_skills(text: str) -> list:
     if not text:
         return []
     
-    # Lowercase everything
     text = text.lower()
-    
-    # Replace separators with commas
     text = re.sub(r"[\n;/]", ",", text)
-    text = re.sub(r"\band\b", ",", text)  # handle "Python and SQL"
-    
-    # Split into chunks
+    text = re.sub(r"\band\b", ",", text)
+
     skills = [s.strip() for s in text.split(",") if s.strip()]
-    
-    # Normalize: remove punctuation except +, #
     skills = [re.sub(r"[^\w\+\# ]", "", s).strip() for s in skills]
-    
-    # Filter out generic non-skill words
+
     blacklist = {
         "required", "skills", "responsibilities", "qualifications",
         "key", "experience", "about", "role", "requirements",
@@ -26,35 +19,27 @@ def clean_and_split_skills(text: str) -> list:
     }
     skills = [s for s in skills if s and s not in blacklist]
     
-    return list(set(skills))  # remove duplicates
+    return list(set(skills))
 
 
-def get_resume_match_score(resume_data: dict, jd_text: str, **kwargs) -> dict:
-    """
-    Matches resume skills with job description skills and calculates score.
-    Accepts extra kwargs like resume_text or resume_skills for flexibility.
-    """
+def get_resume_match_score(resume_data: dict, jd_text: str) -> dict:
+    """Matches resume skills with job description skills and calculates score."""
     
-    # Extract JD skills dynamically
     jd_skills = clean_and_split_skills(jd_text)
     
-    # If resume_skills passed explicitly, use it; else get from resume_data
-    raw_resume_skills = kwargs.get("resume_skills", resume_data.get("skills", []))
-    
+    raw_resume_skills = resume_data.get("skills", [])
     resume_skills = [
         re.sub(r"[^\w\+\# ]", "", s.lower()).strip()
         for s in raw_resume_skills
     ]
     resume_skills = list(set([s for s in resume_skills if s]))
     
-    # Compare sets
     jd_set = set(jd_skills)
     resume_set = set(resume_skills)
     
     matched = sorted(list(jd_set & resume_set))
     missing = sorted(list(jd_set - resume_set))
     
-    # Score calculation
     score = round((len(matched) / len(jd_set)) * 100, 2) if jd_set else 0
     
     return {
