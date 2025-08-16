@@ -268,10 +268,8 @@ if uploaded_resumes and uploaded_jd:
                 # --- Keyword / similarity score (optional) ---
                 try:
                     match = get_resume_match_score(
-                        resume_text=raw_text,
-                        resume_skills=list(resume_skills_set),
-                        jd_text=jd_text,
-                        jd_skills=list(jd_skills_set)  # pass for consistent scoring
+                        resume_data=resume_data,
+                        jd_text=jd_text
                     )
                 except Exception as e:
                     st.error(f"get_resume_match_score failed for {resume_file.name}")
