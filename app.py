@@ -20,7 +20,7 @@ st.set_page_config(
 st.markdown("""
 # 📄 Resume Parser & JD Matcher
 
-Match multiple resumes against job_description.txt  
+Match multiple resumes against jd.txt  
 Get detailed matching analysis with skills comparison.
 
 ---
@@ -44,7 +44,7 @@ except ImportError as e:
     st.stop()
 
 # Constants
-JD_FILE = "job_description.txt"
+JD_FILE = "jd.txt"  # Changed to jd.txt
 SKILL_THRESHOLD = 0.85
 MIN_WORD_COUNT = 100
 
