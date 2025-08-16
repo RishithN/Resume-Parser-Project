@@ -11,18 +11,22 @@ def extract_text_from_pdf(pdf_path):
             text += page_text + "\n"
     return text
 
+
 # --- Simple field extraction ---
 def extract_email(text):
     match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', text)
     return match.group(0) if match else None
 
+
 def extract_phone(text):
     match = re.search(r'\+?\d[\d\s\-]{8,15}\d', text)
     return match.group(0) if match else None
 
+
 def extract_name(text):
     lines = [l.strip() for l in text.strip().split('\n') if l.strip()]
     return lines[0] if lines else "Unknown"
+
 
 # --- Skills (Dynamic) ---
 START_KEYS_RESUME = [
@@ -35,14 +39,16 @@ STOP_KEYS = [
 ]
 SEP_PATTERN = r"[,\n;/\|\&•·]+"
 
+
 def normalize_skill_token(tok: str) -> str:
     if not tok:
         return ""
     s = tok.lower().strip()
-    s = re.sub(r"(?<=\w)-(?=\w)", " ", s)  
-    s = re.sub(r"[^\w\s\+\#]", " ", s)     
+    s = re.sub(r"(?<=\w)-(?=\w)", " ", s)  # deep-learning -> deep learning
+    s = re.sub(r"[^\w\s\+\#]", " ", s)     # keep alphanum, +, #
     s = re.sub(r"\s+", " ", s).strip()
     return s
+
 
 def extract_section(text: str, start_keys, stop_keys) -> str:
     if not text:
@@ -64,6 +70,7 @@ def extract_section(text: str, start_keys, stop_keys) -> str:
             stop_positions.append(start_pos + m.start())
     end_pos = min(stop_positions) if stop_positions else len(text)
     return text[start_pos:end_pos]
+
 
 def extract_skills(text):
     text = text or ""
@@ -93,12 +100,13 @@ def extract_skills(text):
             uniq.append(s)
     return uniq
 
+
 def parse_resume(pdf_path):
     text = extract_text_from_pdf(pdf_path)
     return {
         "name": extract_name(text),
         "email": extract_email(text),
         "phone": extract_phone(text),
-        "skills": extract_skills(text),
+        "skills": extract_skills(text),   # list[str]
         "raw_text": text
     }
