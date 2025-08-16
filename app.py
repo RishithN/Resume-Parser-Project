@@ -6,6 +6,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from fpdf import FPDF
+import re
 
 st.set_page_config(page_title="📄 Resume Matcher", layout="centered", initial_sidebar_state="collapsed")
 
@@ -26,6 +27,7 @@ Get scores, preview results, and download them in CSV format.
 
 st.text("Startup: beginning environment checks...")
 
+# --- NLTK Setup ---
 import nltk
 nltk_data_path = os.path.join(os.path.expanduser("~"), "nltk_data")
 if not os.path.exists(nltk_data_path):
@@ -57,7 +59,9 @@ except Exception as e:
 uploaded_resumes = st.file_uploader("📄 Upload PDF Resumes", type="pdf", accept_multiple_files=True)
 uploaded_jd = st.file_uploader("📋 Upload Job Description (.txt)", type="txt")
 
-# --- Helper Functions ---
+# ----------------------------
+# Helper Functions
+# ----------------------------
 def match_label(score):
     if score >= 70:
         return "🟢 High"
@@ -130,13 +134,44 @@ def generate_pdf(data):
         pdf.output(tmp_pdf.name)
         return tmp_pdf.name
 
-# --- Main Logic ---
+# ----------------------------
+# Skill Cleaning & Extraction
+# ----------------------------
+def clean_skill(skill: str) -> str:
+    """Normalize a skill string (lowercase, strip, remove punctuation)."""
+    if not skill:
+        return ""
+    skill = skill.lower().strip()
+    skill = re.sub(r"[^\w\s\+\#]", "", skill)  # allow alphanum, +, #
+    return skill
+
+def extract_skills_from_text(text: str, known_skills: list) -> list:
+    """Extract skills by matching known skills inside JD/resume text."""
+    text = text.lower()
+    found = []
+    for skill in known_skills:
+        if skill.lower() in text:
+            found.append(skill.lower())
+    return list(set(found))
+
+# Example dictionary of skills (extend as needed)
+KNOWN_SKILLS = [
+    "python", "java", "c++", "c#", "sql", "excel", "power bi",
+    "machine learning", "deep learning", "tensorflow", "keras", "pytorch",
+    "scikit-learn", "pandas", "numpy", "matplotlib", "seaborn",
+    "data analysis", "data visualization", "nlp", "project management",
+    "communication", "leadership"
+]
+
+# ----------------------------
+# Main Logic
+# ----------------------------
 if uploaded_resumes and uploaded_jd:
     if st.button("🔍 Match Resumes Now"):
         start_time = time.time()
         try:
             jd_text = uploaded_jd.read().decode("utf-8")
-            extracted_jd_skills = [s.strip().lower() for s in jd_text.split(",")]  # simple skill extraction
+            extracted_jd_skills = extract_skills_from_text(jd_text, KNOWN_SKILLS)
         except Exception:
             jd_text = ""
             extracted_jd_skills = []
@@ -164,13 +199,13 @@ if uploaded_resumes and uploaded_jd:
                     st.exception(e)
 
                 raw_text = data.get('raw_text', '')
-                extracted_resume_skills = [s.lower() for s in data.get('skills', [])]
+                extracted_resume_skills = [clean_skill(s) for s in data.get('skills', []) if s]
 
                 # --- Compute Matched / Missing Skills ---
                 jd_skills_set = set(extracted_jd_skills)
                 resume_skills_set = set(extracted_resume_skills)
-                matched_skills = list(resume_skills_set & jd_skills_set)
-                missing_skills = list(jd_skills_set - resume_skills_set)
+                matched_skills = sorted(list(jd_skills_set & resume_skills_set))
+                missing_skills = sorted(list(jd_skills_set - resume_skills_set))
 
                 # Resume Score (% of JD skills matched)
                 if jd_skills_set:
