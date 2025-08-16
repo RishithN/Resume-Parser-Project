@@ -1,29 +1,24 @@
-Job Title: Data Analyst
+Job Description – Data Scientist
 
-Company: NovaTech Solutions Pvt. Ltd.
+Position: Data Scientist
+Location: Bangalore, India
+Experience Required: 2–5 years
 
-Location: Bangalore, India (Hybrid)
+About the Role
 
-Job Description:
-We are seeking a highly motivated Data Analyst to join our analytics team. The ideal candidate will have strong analytical skills, experience with data visualization tools, and the ability to transform raw data into actionable insights. You will collaborate with cross-functional teams including Product, Marketing, and Engineering to drive data-driven decision making.
+We are looking for a highly motivated Data Scientist to join our analytics team. The ideal candidate will have a strong foundation in programming, statistical modeling, and machine learning, with the ability to translate complex data into actionable business insights.
 
-Responsibilities:
-- Collect, clean, and analyze structured and unstructured data from multiple sources.
-- Develop dashboards and reports using Power BI/Tableau for business stakeholders.
-- Conduct statistical analysis to identify trends, correlations, and business opportunities.
-- Collaborate with engineers to improve data pipelines and ensure data accuracy.
-- Communicate insights clearly through visualizations and presentations.
 
-Requirements:
-- Bachelor’s degree in Computer Science, Statistics, Mathematics, or related field.
-- 1–3 years of proven experience in data analysis or business intelligence.
-- Proficiency in SQL, Python (Pandas, NumPy), and Excel.
-- Experience with data visualization tools (Power BI, Tableau, or similar).
-- Strong knowledge of statistical methods and hypothesis testing.
-- Excellent communication and problem-solving skills.
+Job Title: Data Scientist
+Skills Required:
 
-Preferred:
-- Experience with cloud platforms (AWS, Azure, or GCP).
-- Familiarity with machine learning concepts.
-
-Salary: Competitive package based on experience.
+Python
+SQL
+Machine Learning
+Deep Learning
+TensorFlow
+Pandas
+NumPy
+Matplotlib
+NLP
+Communication
