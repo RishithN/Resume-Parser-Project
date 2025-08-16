@@ -7,11 +7,12 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from fpdf import FPDF
 
-
 st.set_page_config(page_title="📄 Resume Matcher", layout="centered", initial_sidebar_state="collapsed")
 
 st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
-#st.image("logo.png", use_container_width=False, width=150)
+logo_path = os.path.join(os.path.dirname(__file__), "logo.png")
+if os.path.exists(logo_path):
+    st.image(logo_path, width=150)
 st.markdown("</div>", unsafe_allow_html=True)
 
 st.markdown("""
@@ -56,6 +57,7 @@ except Exception as e:
 uploaded_resumes = st.file_uploader("📄 Upload PDF Resumes", type="pdf", accept_multiple_files=True)
 uploaded_jd = st.file_uploader("📋 Upload Job Description (.txt)", type="txt")
 
+# --- Helper Functions ---
 def match_label(score):
     if score >= 70:
         return "🟢 High"
